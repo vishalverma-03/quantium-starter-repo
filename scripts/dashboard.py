@@ -3,79 +3,103 @@ from dash import dcc, html, Input, Output
 import pandas as pd
 import plotly.express as px
 import os
-from datetime import datetime
-import pkgutil
-
-# --- Fix for Python 3.14 removal of find_loader ---
-if not hasattr(pkgutil, "find_loader"):
-    import importlib.util
-    pkgutil.find_loader = importlib.util.find_spec
 
 # --- Load the cleaned data ---
 data_path = os.path.join(os.path.dirname(__file__), "..", "data", "cleaned_sales_data.csv")
 df = pd.read_csv(data_path)
 
-# --- Convert and sort dates ---
+# --- Prepare and sort the data ---
 df["date"] = pd.to_datetime(df["date"])
 df = df.sort_values("date")
 
-# --- Define price increase date ---
-price_increase_date = datetime(2021, 1, 15)
-
 # --- Initialize Dash app ---
 app = dash.Dash(__name__)
-app.title = "Pink Morsel Sales Dashboard"
+app.title = "Soul Foods Pink Morsel Sales Dashboard"
 
-# --- App Layout ---
-app.layout = html.Div([
-    html.H1("Soul Foods Pink Morsel Sales Dashboard", style={
-        "textAlign": "center",
-        "color": "#2c3e50",
-        "marginBottom": "10px"
-    }),
+# --- Layout ---
+app.layout = html.Div(
+    style={
+        "fontFamily": "Arial, sans-serif",
+        "backgroundColor": "#f9fafc",
+        "padding": "20px",
+        "maxWidth": "900px",
+        "margin": "auto",
+        "borderRadius": "12px",
+        "boxShadow": "0 4px 10px rgba(0,0,0,0.1)",
+    },
+    children=[
+        html.H1(
+            "Soul Foods Pink Morsel Sales Dashboard",
+            style={
+                "textAlign": "center",
+                "color": "#2c3e50",
+                "marginBottom": "10px",
+            },
+        ),
+        html.P(
+            "Visualising the impact of the January 15, 2021 price increase on sales, with region-specific insights.",
+            style={
+                "textAlign": "center",
+                "color": "#7f8c8d",
+                "marginBottom": "30px",
+                "fontSize": "16px",
+            },
+        ),
 
-    html.P(
-        "Visualizing the impact of the January 15, 2021 price increase on sales performance.",
-        style={"textAlign": "center", "color": "gray", "marginBottom": "30px"}
-    ),
-
-    html.Div([
-        html.Label("Select Region:", style={"fontWeight": "bold"}),
-        dcc.Dropdown(
-            options=[{"label": region, "value": region} for region in sorted(df["region"].unique())] + [
-                {"label": "All Regions", "value": "All"}
+        html.Div(
+            [
+                html.Label("Select Region:", style={"fontWeight": "bold", "color": "#34495e"}),
+                dcc.RadioItems(
+                    id="region-filter",
+                    options=[
+                        {"label": "All Regions", "value": "all"},
+                        {"label": "North", "value": "north"},
+                        {"label": "East", "value": "east"},
+                        {"label": "South", "value": "south"},
+                        {"label": "West", "value": "west"},
+                    ],
+                    value="all",
+                    labelStyle={
+                        "display": "inline-block",
+                        "marginRight": "15px",
+                        "color": "#2c3e50",
+                        "cursor": "pointer",
+                    },
+                    inputStyle={"marginRight": "5px"},
+                    style={"marginBottom": "20px"},
+                ),
             ],
-            value="All",
-            id="region-dropdown",
-            clearable=False,
-            style={"width": "50%"}
-        )
-    ], style={"textAlign": "center", "marginBottom": "20px"}),
+            style={"textAlign": "center"},
+        ),
 
-    dcc.Graph(id="sales-line-chart")
-])
+        dcc.Graph(id="sales-chart", style={"backgroundColor": "white", "borderRadius": "10px"}),
+    ],
+)
 
-# --- Callbacks ---
+# --- Callback for interactive filtering ---
 @app.callback(
-    Output("sales-line-chart", "figure"),
-    Input("region-dropdown", "value")
+    Output("sales-chart", "figure"),
+    Input("region-filter", "value")
 )
 def update_chart(selected_region):
-    if selected_region == "All":
+    if selected_region == "all":
         filtered_df = df
+        title = "Pink Morsel Sales Across All Regions"
     else:
-        filtered_df = df[df["region"] == selected_region]
+        filtered_df = df[df["region"].str.lower() == selected_region.lower()]
+        title = f"Pink Morsel Sales - {selected_region.title()} Region"
 
     fig = px.line(
         filtered_df,
         x="date",
         y="Sales",
-        color="region" if selected_region == "All" else None,
-        title="Sales Trend Over Time" if selected_region == "All" else f"Sales Trend - {selected_region}",
-        labels={"date": "Date", "Sales": "Total Sales ($)"}
+        color="region" if selected_region == "all" else None,
+        title=title,
+        labels={"date": "Date", "Sales": "Total Sales ($)", "region": "Region"},
     )
 
-    # Add the vertical line
+    # Add vertical line for price increase
+    price_increase_date = pd.to_datetime("2021-01-15")
     fig.add_vline(
         x=price_increase_date,
         line_width=2,
@@ -83,10 +107,10 @@ def update_chart(selected_region):
         line_color="red"
     )
 
-    # Add annotation
+    # Annotation for the price increase
     fig.add_annotation(
         x=price_increase_date,
-        y=filtered_df["Sales"].max(),
+        y=filtered_df["Sales"].max() if not filtered_df.empty else 0,
         text="Price Increase (Jan 15, 2021)",
         showarrow=True,
         arrowhead=2,
@@ -95,17 +119,17 @@ def update_chart(selected_region):
         font=dict(color="red", size=12)
     )
 
+    # Layout tweaks
     fig.update_layout(
         title_x=0.5,
         plot_bgcolor="white",
-        paper_bgcolor="white",
-        xaxis=dict(showgrid=True, gridcolor="lightgray"),
-        yaxis=dict(showgrid=True, gridcolor="lightgray")
+        xaxis=dict(showgrid=True, gridcolor="#ecf0f1"),
+        yaxis=dict(showgrid=True, gridcolor="#ecf0f1"),
     )
 
     return fig
 
 
-# --- Run the server ---
+# --- Run the app ---
 if __name__ == "__main__":
-    app.run(debug=False, port=8050)
+    app.run(debug=False)
